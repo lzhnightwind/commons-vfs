@@ -16,6 +16,8 @@
  */
 package org.apache.commons.vfs2.provider.ftp;
 
+import java.util.regex.Pattern;
+
 import org.apache.commons.vfs2.provider.FileNameParser;
 import org.apache.commons.vfs2.provider.HostFileNameParser;
 
@@ -27,6 +29,11 @@ public class FtpFileNameParser extends HostFileNameParser
     private static final FtpFileNameParser INSTANCE = new FtpFileNameParser();
 
     private static final int PORT = 21;
+    
+    private static final String IPV6_STD_PATTERN = "^\\[([0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){7})\\]$";
+
+    private static final String IPV6_HEX_COMPRESSED_PATTERN = "^\\[((([0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){0,5})?)" + "::"
+        + "(([0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){0,5})?))\\]$";
 
     public FtpFileNameParser()
     {
@@ -37,4 +44,39 @@ public class FtpFileNameParser extends HostFileNameParser
     {
         return INSTANCE;
     }
+    
+    @Override
+    protected String extractHostName( StringBuilder name ) 
+    {
+        int pos = 0;
+        
+        // Support the URL described in RFC 2732
+        if ( name.charAt( 0 ) == '[' && name.indexOf( "]" ) != 0 )
+        {
+            pos = name.indexOf( "]" ) + 1;
+        }
+
+        // If not include ipv6 address, parse it as before
+        if ( pos == 0 ) 
+        {
+            return super.extractHostName( name );
+        }
+        
+        final Pattern ipv6_std_pattern = Pattern.compile( IPV6_STD_PATTERN );
+        final Pattern ipv6_hex_compressed_pattern = Pattern.compile( IPV6_HEX_COMPRESSED_PATTERN );
+        
+        final String hostname = name.substring( 0, pos );
+
+        if ( ipv6_std_pattern.matcher( hostname ).matches()
+            || ipv6_hex_compressed_pattern.matcher( hostname ).matches() )
+        {
+            name.delete(0, pos);
+            return hostname;  
+        }
+        else {
+            return super.extractHostName( name );
+        }
+
+    }
+
 }

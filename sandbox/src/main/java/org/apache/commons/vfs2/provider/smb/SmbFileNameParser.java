@@ -16,6 +16,8 @@
  */
 package org.apache.commons.vfs2.provider.smb;
 
+import java.util.regex.Pattern;
+
 import org.apache.commons.vfs2.FileName;
 import org.apache.commons.vfs2.FileSystemException;
 import org.apache.commons.vfs2.FileType;
@@ -30,6 +32,11 @@ import org.apache.commons.vfs2.provider.VfsComponentContext;
 public class SmbFileNameParser extends URLFileNameParser
 {
     private final static SmbFileNameParser INSTANCE = new SmbFileNameParser();
+    
+    private static final String IPV6_STD_PATTERN = "^\\[([0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){7})\\]$";
+
+    private static final String IPV6_HEX_COMPRESSED_PATTERN = "^\\[((([0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){0,5})?)" + "::"
+        + "(([0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{1,4}){0,5})?))\\]$";
 
     public SmbFileNameParser()
     {
@@ -101,5 +108,39 @@ public class SmbFileNameParser extends URLFileNameParser
         }
 
         return null;
+    }
+    
+    @Override
+    protected String extractHostName( StringBuilder name ) 
+    {
+        int pos = 0;
+        
+        // Support the URL described in RFC 2732
+        if ( name.charAt( 0 ) == '[' && name.indexOf( "]" ) != 0 )
+        {
+            pos = name.indexOf( "]" ) + 1;
+        }
+
+        // If not include ipv6 address, parse it as before
+        if ( pos == 0 ) 
+        {
+            return super.extractHostName( name );
+        }
+        
+        final Pattern ipv6_std_pattern = Pattern.compile( IPV6_STD_PATTERN );
+        final Pattern ipv6_hex_compressed_pattern = Pattern.compile( IPV6_HEX_COMPRESSED_PATTERN );
+        
+        final String hostname = name.substring( 0, pos );
+
+        if ( ipv6_std_pattern.matcher( hostname ).matches()
+            || ipv6_hex_compressed_pattern.matcher( hostname ).matches() )
+        {
+            name.delete(0, pos);
+            return hostname;  
+        }
+        else {
+            return super.extractHostName( name );
+        }
+
     }
 }
